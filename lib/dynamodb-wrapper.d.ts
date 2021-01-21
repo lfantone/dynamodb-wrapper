@@ -1,4 +1,5 @@
 declare interface IDynamoDBWrapperOptions {
+    autoPagination?: boolean;
     tableNamePrefix?: string;
     groupDelayMs?: number;
     maxRetries?: number;
@@ -21,10 +22,12 @@ declare interface IBatchWriteItemOption {
 
 declare interface IQueryOptions {
     groupDelayMs?: number;
+    autoPagination?: boolean;
 }
 
 declare interface IScanOptions {
     groupDelayMs?: number;
+    autoPagination?: boolean;
 }
 
 declare type TDictionary<T> = { [key: string] : T; };

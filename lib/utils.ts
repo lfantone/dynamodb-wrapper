@@ -24,7 +24,7 @@ export function appendArray(array1: any[], array2: any[]) {
     }
 }
 
-export function wait(ms: number): Promise<any> {
+export function wait(ms: number): Promise<void> {
     return new Promise(resolve => {
         setTimeout(() => {
             resolve();

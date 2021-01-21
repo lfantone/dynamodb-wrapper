@@ -197,7 +197,7 @@ export class MockDynamoDB {
                     }
 
                     if (this._countRequests < 3) {
-                        response['LastEvaluatedKey'] = 'foo';
+                        response['LastEvaluatedKey'] = { id: { S: 'foo' } };
                     }
 
                     resolve(response);

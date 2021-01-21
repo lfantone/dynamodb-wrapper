@@ -4,7 +4,7 @@ import { DynamoDBWrapper } from './dynamodb-wrapper';
 
 describe('lib/dynamodb-wrapper', () => {
 
-    function _setupDynamoDBWrapper(options?: IMockDynamoDBOptions) {
+    function _setupDynamoDBWrapper(options?: IMockDynamoDBOptions, wrapperOptions?: IDynamoDBWrapperOptions) {
         options = options || {};
         let mockDynamoDB = new MockDynamoDB(options);
         return {
@@ -15,7 +15,8 @@ describe('lib/dynamodb-wrapper', () => {
                 maxRetries: 2,
                 retryDelayOptions: {
                     base: 0
-                }
+                },
+                ...wrapperOptions
             })
         };
     }
@@ -277,6 +278,20 @@ describe('lib/dynamodb-wrapper', () => {
             expect(dynamoDB.query).toHaveBeenCalledTimes(3);
             expect(response.Items.length).toBe(6);
             expect(response.ConsumedCapacity).not.toBeDefined();
+        });
+
+        it('should query only once when auto pagination is disabled', async () => {
+            let params = _setupQueryParams();
+            let mock = _setupDynamoDBWrapper(null, { autoPagination: false });
+            let dynamoDB = mock.dynamoDB;
+            let dynamoDBWrapper = mock.dynamoDBWrapper;
+
+            spyOn(dynamoDB, 'query').and.callThrough();
+            let response = await dynamoDBWrapper.query(params);
+
+            expect(dynamoDB.query).toHaveBeenCalledTimes(1);
+
+            expect(response.LastEvaluatedKey).toEqual({ id: { S: 'foo' } });
         });
 
         it('should aggregate consumed capacity (TOTAL) from multiple responses', async () => {

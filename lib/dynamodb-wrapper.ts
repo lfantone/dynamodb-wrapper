@@ -15,6 +15,7 @@ export class DynamoDBWrapper {
     public groupDelayMs: number;
     public maxRetries: number;
     public retryDelayOptions: any;
+    public autoPagination: boolean;
 
     constructor(dynamoDB: any, options?: IDynamoDBWrapperOptions) {
         this.dynamoDB = dynamoDB;
@@ -24,6 +25,8 @@ export class DynamoDBWrapper {
         options.retryDelayOptions = options.retryDelayOptions || {};
         this.tableNamePrefix = typeof options.tableNamePrefix === 'string' ? options.tableNamePrefix : '';
         this.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, 100]);
+        this.autoPagination = options.autoPagination ?? true;
+
         this.maxRetries = getNonNegativeInteger([options.maxRetries, 10]);
         this.retryDelayOptions = {};
         this.retryDelayOptions.base = getNonNegativeInteger([options.retryDelayOptions.base, 100]);
@@ -147,8 +150,9 @@ export class DynamoDBWrapper {
         // set default options
         options = options || {};
         options.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
+        options.autoPagination = options.autoPagination ?? this.autoPagination;
 
-        let responses = await this._queryOrScanHelper('query', params, options.groupDelayMs);
+        let responses = await this._queryOrScanHelper('query', params, options);
         return _makeQueryOrScanResponse(responses);
     }
 
@@ -168,8 +172,9 @@ export class DynamoDBWrapper {
         // set default options
         options = options || {};
         options.groupDelayMs = getNonNegativeInteger([options.groupDelayMs, this.groupDelayMs]);
+        options.autoPagination = options.autoPagination ?? this.autoPagination;
 
-        let responses = await this._queryOrScanHelper('scan', params, options.groupDelayMs);
+        let responses = await this._queryOrScanHelper('scan', params, options);
         return _makeQueryOrScanResponse(responses);
     }
 
@@ -215,19 +220,21 @@ export class DynamoDBWrapper {
         return _makeBatchWriteItemResponse(tableNames, responsesPerTable, totalRequestItems);
     }
 
-    private async _queryOrScanHelper(method: string, params: any, groupDelayMs: number): Promise<any> {
+    private async _queryOrScanHelper(method: string, params: any, { groupDelayMs, autoPagination }: IQueryOptions ): Promise<any> {
         let list = [];
 
         // first page of data
         let res = await this._callDynamoDB(method, params);
         list.push(res);
 
-        // make subsequent requests to get remaining pages of data
-        while (res.LastEvaluatedKey) {
-            await wait(groupDelayMs);
-            params.ExclusiveStartKey = res.LastEvaluatedKey;
-            res = await this._callDynamoDB(method, params);
-            list.push(res);
+        if (autoPagination) {
+            // make subsequent requests to get remaining pages of data
+            while (res.LastEvaluatedKey) {
+                await wait(groupDelayMs);
+                params.ExclusiveStartKey = res.LastEvaluatedKey;
+                res = await this._callDynamoDB(method, params);
+                list.push(res);
+            }
         }
 
         return list;
@@ -406,17 +413,20 @@ function _makeQueryOrScanResponse(responses: any): any {
     let count = 0;
     let scannedCount = 0;
     let items = [];
+    let lastEvaluatedKey = null;
 
     for (let res of responses) {
         count += res.Count;
         scannedCount += res.ScannedCount;
+        lastEvaluatedKey = res.LastEvaluatedKey;
         appendArray(items, res.Items);
     }
 
     let result: any = {
         Count: count,
         ScannedCount: scannedCount,
-        Items: items
+        Items: items,
+        LastEvaluatedKey: lastEvaluatedKey
     };
 
     if (responses[0].ConsumedCapacity) {
